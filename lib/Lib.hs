@@ -48,25 +48,49 @@ data SomeRequestParams f = SomeRequestParams
 
 deriving instance AllBF Show f SomeRequestParams => Show (SomeRequestParams f)
 
-test1, test2, test3 :: SomeRequestParams UnvalidatedData
-test1 = SomeRequestParams
-  { someBool = False
-  , somePositiveInt = Unvalidated (-10)
-  , someLilString = Unvalidated "foo"
-  }
-test2 = SomeRequestParams
-  { someBool = True
-  , somePositiveInt = Unvalidated 42
-  , someLilString = Unvalidated "this is bad!"
-  }
-test3 = SomeRequestParams
-  { someBool = False
-  , somePositiveInt = Unvalidated 42
-  , someLilString = Unvalidated "yay!"
-  }
+tests :: [SomeRequestParams UnvalidatedData]
+tests =
+  [ SomeRequestParams
+    { someBool = False
+    , somePositiveInt = Unvalidated (-10)
+    , someLilString = Unvalidated "foo"
+    }
+
+  , SomeRequestParams
+    { someBool = True
+    , somePositiveInt = Unvalidated 42
+    , someLilString = Unvalidated "this is bad!"
+    }
+
+  , SomeRequestParams
+    { someBool = False
+    , somePositiveInt = Unvalidated 42
+    , someLilString = Unvalidated "yay!"
+    }
+  ]
 
 result :: [Either (Partial SomeRequestParams InvalidData) (SomeRequestParams ValidData)]
-result = runIdentity . validate <$> [test1, test2, test3]
+result = runIdentity . validate <$> tests
+{-
+Left SomeRequestParams
+    { someBool = False
+    , somePositiveInt = Just IsLessThanZero
+    , someLilString = Nothing
+    }
 
-message :: String
-message = show result
+Left SomeRequestParams
+    { someBool = True
+    , somePositiveInt = Nothing
+    , someLilString = Just LongerThanFive
+    }
+
+Right
+    ( SomeRequestParams
+        { someBool = False
+        , somePositiveInt = Positive
+            { getPositive = 42 }
+        , someLilString = LilString
+            { getMySpecialString = "yay!" }
+        }
+    )
+-}

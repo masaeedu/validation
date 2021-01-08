@@ -1,6 +1,9 @@
 module Main where
 
 import Lib
+import Text.Pretty.Simple
 
 main :: IO ()
-main = putStrLn message
+main = do
+  _ <- traverse pPrint result
+  pure ()

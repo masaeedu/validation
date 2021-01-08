@@ -1,4 +1,4 @@
-{-# LANGUAGE DeriveGeneric, DeriveAnyClass, ImpredicativeTypes #-}
+{-# LANGUAGE DeriveGeneric, DeriveAnyClass, ImpredicativeTypes, UndecidableSuperClasses #-}
 module Validation where
 
 import Barbies (FunctorB(..), TraversableB(..), ConstraintsB(..), bsequence, bmapC)
@@ -9,6 +9,18 @@ import Data.Bifunctor (Bifunctor(..))
 import GHC.Generics (Generic(..))
 import Data.Aeson (FromJSON(..), ToJSON(..))
 
+-- Some random constraint constructors we need
+class Trivial x
+instance Trivial x
+
+type Show1' f = (forall x. Show x => Show (f x)) :: Constraint
+
+class (x ~ y) => Equals x y
+instance Equals x x
+
+-- Class for types that represent a small "validated" subset of some larger "raw" type, where the raw
+-- type can be converted to a sum of some error representation and the the validated type in a given
+-- context (e.g. purely with @Identity@, or with arbitrary side effects in @IO@).
 class Functor (Context v) => Validate v
   where
   type Context v :: Type -> Type
@@ -17,8 +29,14 @@ class Functor (Context v) => Validate v
   type Error v :: Type
   validate :: Raw v -> Context v (Either (Error v) v)
 
+-- Sometimes you need to pass @Type -> Constraint@-kinded constructors into stuff (e.g. Barbies), and when that involves
+-- requiring something about the associated types in @Validate@, you'll need a class like this
+class (Validate v, cf (Context v), cr (Raw v), ce (Error v), cv v) => ValidateWhere cf cr ce cv v
+instance (Validate v, cf (Context v), cr (Raw v), ce (Error v), cv v) => ValidateWhere cf cr ce cv v
+
 -- {{{ VData
 
+-- Data that is either unvalidated, invalid, or valid
 data VData (validationState :: Maybe Bool) v
   where
   Unvalidated :: Validate v => { getUnvalidated :: Raw v   } -> UnvalidatedData v
@@ -29,6 +47,7 @@ type UnvalidatedData = VData 'Nothing
 type InvalidData = VData ('Just 'False)
 type ValidData = VData ('Just 'True)
 
+-- If a thing can be validated, so can a @VData@ wrapper around it
 instance Validate v => Validate (ValidData v)
   where
   type Context (ValidData v) = Context v
@@ -43,9 +62,6 @@ validateData :: forall v.
   UnvalidatedData v ->
   Compose (Context v) ValidatedData v
 validateData = Compose . fmap (either ValidatedData ValidatedData) . validate @(ValidData v)
-
-class (Validate v, Context v ~ f) => ValidateInContext f v
-instance (Validate v, Context v ~ f) => ValidateInContext f v
 
 validateFields :: forall b f. (Applicative f, TraversableB b) => b (Compose f ValidatedData) -> f (Either (Partial b InvalidData) (b ValidData))
 validateFields = fmap go . bsequence
@@ -64,6 +80,12 @@ validateFields = fmap go . bsequence
   tryInvalidate = (Augmented .) $ bmap $ \case
     ValidatedData (Valid _) -> Compose Nothing
     ValidatedData (Invalid e) -> Compose $ Just $ Invalid e
+
+instance (AllB (ValidateWhere (Equals Identity) Trivial Trivial Trivial) b, TraversableB b, ConstraintsB b) => Validate (b ValidData)
+  where
+  type Raw (b ValidData) = b UnvalidatedData
+  type Error (b ValidData) = Partial b InvalidData
+  validate = validateFields . bmapC @(ValidateWhere (Equals Identity) Trivial Trivial Trivial) validateData
 
 -- {{{ Instances
 
@@ -161,8 +183,6 @@ instance (Traversable g, TraversableB b) => TraversableB (Augmented g b)
   where
   btraverse f = fmap Augmented . btraverse (fmap Compose . traverse f . getCompose) . getAugmented
 
-type Show1' f = (forall x. Show x => Show (f x)) :: Constraint
-
 newtype Shown x = Shown { getShown :: String }
 instance Show (Shown x)
   where
@@ -194,10 +214,3 @@ instance {-# OVERLAPS #-}
   Show (Augmented f b InvalidData)
   where
   show = show . bmapC @ShowError (Shown . show . fmap getInvalid . getCompose) . getAugmented
-
-
-instance (AllB (ValidateInContext Identity) b, TraversableB b, ConstraintsB b) => Validate (b ValidData)
-  where
-  type Raw (b ValidData) = b UnvalidatedData
-  type Error (b ValidData) = Partial b InvalidData
-  validate = validateFields . bmapC @(ValidateInContext Identity) validateData
