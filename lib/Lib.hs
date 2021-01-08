@@ -8,6 +8,9 @@ import GHC.Generics (Generic(..))
 import Barbies (ConstraintsB(..), FunctorB(..), TraversableB(..), AllBF, Rec(..), Barbie(..))
 import Data.Coerce (Coercible)
 
+import Constraints
+import Barbies.Augmented
+
 import Validation
 import Validation.LilString
 import Validation.Positive

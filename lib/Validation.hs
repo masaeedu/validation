@@ -2,7 +2,7 @@
 module Validation where
 
 import Barbies (FunctorB(..), TraversableB(..), ConstraintsB(..), bsequence, bmapC, Barbie(..))
-import Data.Kind (Type, Constraint)
+import Data.Kind (Type)
 import Data.Functor.Compose (Compose(..))
 import Data.Functor.Sum
 import Data.Bifunctor (Bifunctor(..))
@@ -10,57 +10,8 @@ import GHC.Generics (Generic(..))
 import Data.Aeson (FromJSON(..), ToJSON(..))
 import Data.Coerce (Coercible, coerce)
 
--- Augmented newtype for barbies
-newtype Augmented f b g = Augmented { getAugmented :: b (Compose f g) }
-  deriving Generic
-
-type Partial = Augmented Maybe
-
-instance (Functor g, FunctorB b) => FunctorB (Augmented g b)
-  where
-  bmap f = Augmented . bmap (Compose . fmap f . getCompose) . getAugmented
-
-instance (Traversable g, TraversableB b) => TraversableB (Augmented g b)
-  where
-  btraverse f = fmap Augmented . btraverse (fmap Compose . traverse f . getCompose) . getAugmented
-
-newtype Shown x = Shown { getShown :: String }
-instance Show (Shown x)
-  where
-  show = getShown
-
-instance
-  ( Show1' f
-  , Show1' g
-  , AllB Show b
-  , Show (b Shown)
-  , FunctorB b
-  , ConstraintsB b
-  ) =>
-  Show (Augmented f b g)
-  where
-  show = show . bmapC @Show (Shown . show . getCompose) . getAugmented
-
-instance {-# OVERLAPS #-}
-  ( Show1' f
-  , Functor f
-  , AllB (ValidateWhere Trivial Show Trivial) b
-  , Show (b Shown)
-  , FunctorB b
-  , ConstraintsB b
-  ) =>
-  Show (Augmented f b InvalidData)
-  where
-  show = show . bmapC @(ValidateWhere Trivial Show Trivial) (Shown . show . fmap getInvalid . getCompose) . getAugmented
-
--- Some random constraint constructors we need
-class Trivial x
-instance Trivial x
-
-type Show1' f = (forall x. Show x => Show (f x)) :: Constraint
-
-class (x ~ y) => Equals x y
-instance Equals x x
+import Constraints
+import Barbies.Augmented
 
 -- Class for types that represent a small "validated" subset of some larger "raw" type, where the raw
 -- type can be converted to a sum of some error representation and the the validated type in a given
@@ -147,3 +98,15 @@ instance
   where
   validate = fmap (fmap Barbie) . validateFields . bmapC @(Validate f) @b @UnvalidatedData @(Compose f ValidatedData) (Compose . fmap (either InL InR) . validate)
   extract = bmapC @(Validate f) (extract @f) . getBarbie
+
+instance {-# OVERLAPS #-}
+  ( Show1' f
+  , Functor f
+  , AllB (ValidateWhere Trivial Show Trivial) b
+  , Show (b Shown)
+  , FunctorB b
+  , ConstraintsB b
+  ) =>
+  Show (Augmented f b InvalidData)
+  where
+  show = show . bmapC @(ValidateWhere Trivial Show Trivial) (Shown . show . fmap getInvalid . getCompose) . getAugmented
