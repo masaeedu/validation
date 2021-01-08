@@ -16,10 +16,10 @@ import Barbies.Augmented
 -- Class for types that represent a small "validated" subset of some larger "raw" type, where the raw
 -- type can be converted to a sum of some error representation and the the validated type in a given
 -- context (e.g. purely with @Identity@, or with arbitrary side effects in @IO@).
-type family Raw v :: Type
-type family Error v :: Type
 class Functor f => Validate f v
   where
+  type family Raw v :: Type
+  type family Error v :: Type
   validate :: Raw v -> f (Either (Error v) v)
   extract :: v -> Raw v
 
@@ -61,10 +61,10 @@ newtype ValidData v
 type ValidatedData = Sum InvalidData ValidData
 
 -- If a thing can be validated, so can a @VData@ wrapper around it
-type instance Raw (ValidData v) = UnvalidatedData v
-type instance Error (ValidData v) = InvalidData v
 instance Validate f v => Validate f (ValidData v)
   where
+  type instance Raw (ValidData v) = UnvalidatedData v
+  type instance Error (ValidData v) = InvalidData v
   validate = fmap (bimap Invalid Valid). validate . getUnvalidated
   extract = Unvalidated . extract @f @v . getValid
 
@@ -86,8 +86,6 @@ validateFields = fmap go . bsequence
     InR (Valid _) -> Compose Nothing
     InL (Invalid e) -> Compose $ Just $ Invalid e
 
-type instance Raw (Barbie b ValidData) = b UnvalidatedData
-type instance Error (Barbie b ValidData) = Partial b InvalidData
 instance
   ( Applicative f
   , AllB (Validate f) b
@@ -96,6 +94,8 @@ instance
   ) =>
   Validate f (Barbie b ValidData)
   where
+  type instance Raw (Barbie b ValidData) = b UnvalidatedData
+  type instance Error (Barbie b ValidData) = Partial b InvalidData
   validate = fmap (fmap Barbie) . validateFields . bmapC @(Validate f) @b @UnvalidatedData @(Compose f ValidatedData) (Compose . fmap (either InL InR) . validate)
   extract = bmapC @(Validate f) (extract @f) . getBarbie
 

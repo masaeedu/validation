@@ -12,10 +12,10 @@ newtype Positive = Positive { getPositive :: Int }
 data PositiveError = IsLessThanZero
   deriving Show
 
-type instance Raw Positive = Int
-type instance Error Positive = PositiveError
 instance Applicative f => Validate f Positive
   where
+  type instance Raw Positive = Int
+  type instance Error Positive = PositiveError
   validate i
     | i < 0 = pure $ Left IsLessThanZero
     | otherwise = pure $ Right $ Positive i

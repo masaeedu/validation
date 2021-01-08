@@ -12,10 +12,10 @@ newtype LilString = LilString { getMySpecialString :: String }
 data LilStringError = LongerThanFive | ShorterThanTwo
   deriving Show
 
-type instance Raw LilString = String
-type instance Error LilString = LilStringError
 instance Applicative f => Validate f LilString
   where
+  type instance Raw LilString = String
+  type instance Error LilString = LilStringError
   validate s
     | length s > 5 = pure $ Left LongerThanFive
     | length s < 2 = pure $ Left ShorterThanTwo

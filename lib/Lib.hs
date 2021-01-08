@@ -6,7 +6,6 @@ import Data.Aeson (FromJSON(..), decode)
 import Data.Functor.Identity (Identity(..))
 import GHC.Generics (Generic(..))
 import Barbies (ConstraintsB(..), FunctorB(..), TraversableB(..), AllBF, Rec(..), Barbie(..))
-import Data.Coerce (Coercible)
 
 import Constraints
 import Barbies.Augmented
@@ -24,9 +23,7 @@ data SomeRequestParams f = SomeRequestParams
   deriving stock Generic
   deriving anyclass (FunctorB, TraversableB, ConstraintsB)
 
-type instance Raw (SomeRequestParams ValidData) = SomeRequestParams UnvalidatedData
-type instance Error (SomeRequestParams ValidData) = Partial SomeRequestParams InvalidData
-deriving via (Barbie SomeRequestParams ValidData) instance (Applicative f, forall x y. Coercible x y => Coercible (f x) (f y)) => Validate f (SomeRequestParams ValidData)
+deriving via (Barbie SomeRequestParams ValidData) instance (Applicative f, CoercibleF f) => Validate f (SomeRequestParams ValidData)
 
 deriving instance AllBF Show f SomeRequestParams => Show (SomeRequestParams f)
 deriving instance AllB (ValidateWhere FromJSON Trivial Trivial) SomeRequestParams => FromJSON (SomeRequestParams UnvalidatedData)
