@@ -5,6 +5,7 @@ import Barbies (FunctorB(..), TraversableB(..), ConstraintsB(..), bsequence, bma
 import Data.Kind (Type, Constraint)
 import Data.Functor.Identity (Identity(..))
 import Data.Functor.Compose (Compose(..))
+import Data.Functor.Sum
 import Data.Bifunctor (Bifunctor(..))
 import GHC.Generics (Generic(..))
 import Data.Aeson (FromJSON(..), ToJSON(..))
@@ -37,15 +38,20 @@ instance (Validate v, cf (Context v), cr (Raw v), ce (Error v), cv v) => Validat
 -- {{{ VData
 
 -- Data that is either unvalidated, invalid, or valid
-data VData (validationState :: Maybe Bool) v
-  where
-  Unvalidated :: Validate v => { getUnvalidated :: Raw v   } -> UnvalidatedData v
-  Invalid     :: Validate v => { getInvalid     :: Error v } -> InvalidData     v
-  Valid       ::               { getValid       :: v       } -> ValidData       v
 
-type UnvalidatedData = VData 'Nothing
-type InvalidData = VData ('Just 'False)
-type ValidData = VData ('Just 'True)
+data UnvalidatedData v
+  where
+  Unvalidated :: Validate v => { getUnvalidated :: Raw v } -> UnvalidatedData v
+
+data InvalidData v
+  where
+  Invalid :: Validate v => { getInvalid :: Error v } -> InvalidData v
+
+data ValidData v
+  where
+  Valid :: { getValid :: v } -> ValidData v
+
+type ValidatedData = Sum InvalidData ValidData
 
 -- If a thing can be validated, so can a @VData@ wrapper around it
 instance Validate v => Validate (ValidData v)
@@ -55,13 +61,11 @@ instance Validate v => Validate (ValidData v)
   type Error (ValidData v) = InvalidData v
   validate = fmap (bimap Invalid Valid). validate @v . getUnvalidated
 
-data ValidatedData v = forall b. ValidatedData { getValidatedData :: VData ('Just b) v }
-
 validateData :: forall v.
   Validate v =>
   UnvalidatedData v ->
   Compose (Context v) ValidatedData v
-validateData = Compose . fmap (either ValidatedData ValidatedData) . validate @(ValidData v)
+validateData = Compose . fmap (either InL InR) . validate @(ValidData v)
 
 validateFields :: forall b f. (Applicative f, TraversableB b) => b (Compose f ValidatedData) -> f (Either (Partial b InvalidData) (b ValidData))
 validateFields = fmap go . bsequence
@@ -73,13 +77,13 @@ validateFields = fmap go . bsequence
 
   tryValidate :: b ValidatedData -> Maybe (b ValidData)
   tryValidate = btraverse $ \case
-    ValidatedData (Invalid _) -> Nothing
-    ValidatedData (Valid v) -> Just $ Valid v
+    InL (Invalid _) -> Nothing
+    InR (Valid v) -> Just $ Valid v
 
   tryInvalidate :: b ValidatedData -> Partial b InvalidData
   tryInvalidate = (Augmented .) $ bmap $ \case
-    ValidatedData (Valid _) -> Compose Nothing
-    ValidatedData (Invalid e) -> Compose $ Just $ Invalid e
+    InR (Valid _) -> Compose Nothing
+    InL (Invalid e) -> Compose $ Just $ Invalid e
 
 instance (AllB (ValidateWhere (Equals Identity) Trivial Trivial Trivial) b, TraversableB b, ConstraintsB b) => Validate (b ValidData)
   where
