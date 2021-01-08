@@ -1,0 +1,54 @@
+spec-version: 0.30.0
+name: validationexample
+author: Asad Saeeduddin
+maintainer: masaeedu@gmail.com
+license: MIT
+
+build-type: Simple
+
+dependencies:
+- { name: "base", version: '>=4.14 && <4.15' }
+- aeson
+- barbies
+- validation-selective
+
+ghc-options: -Wall
+default-extensions:
+- GADTs
+
+- StandaloneDeriving
+- DeriveFunctor
+- DerivingVia
+- GeneralizedNewtypeDeriving
+
+- ScopedTypeVariables
+- RankNTypes
+- QuantifiedConstraints
+
+- TypeApplications
+- TypeOperators
+- MultiParamTypeClasses
+
+- ConstraintKinds
+- DataKinds
+- PolyKinds
+- KindSignatures
+
+- UndecidableInstances
+- FlexibleInstances
+- FlexibleContexts
+- DefaultSignatures
+
+- TypeFamilies
+- StandaloneKindSignatures
+
+- LambdaCase
+
+library:
+  source-dirs: lib
+
+executable:
+  source-dirs: app
+  main: Main.hs
+  dependencies:
+  - validationexample
