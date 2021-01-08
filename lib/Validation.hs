@@ -125,10 +125,6 @@ instance Show v => Show (ValidData v)
   where
   show = show . getValid
 
--- instance Show1 (InvalidData)
---
--- instance Show1 (VData ('Nothing))
-
 --     }}}
 
 --     {{{ Aeson
