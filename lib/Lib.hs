@@ -6,7 +6,7 @@ import GHC.Generics (Generic(..))
 import Barbies (ConstraintsB(..), FunctorB(..), TraversableB(..), AllBF, Rec(..))
 import Validation
 
--- Strings that are longer two characters and shorter than five characters
+-- Strings that are not shorter than two characters and not longer than five
 newtype LilString = LilString { getMySpecialString :: String }
   deriving Show
 
