@@ -1,6 +1,8 @@
-{-# LANGUAGE TypeFamilies, DeriveGeneric, DeriveAnyClass, DerivingVia, LambdaCase #-}
+{-# LANGUAGE TypeFamilies, DeriveGeneric, DeriveAnyClass, DerivingVia, LambdaCase, OverloadedStrings #-}
 module Lib where
 
+import Data.Maybe (maybeToList)
+import Data.Aeson (FromJSON(..), decode)
 import Data.Functor.Identity (Identity(..))
 import GHC.Generics (Generic(..))
 import Barbies (ConstraintsB(..), FunctorB(..), TraversableB(..), AllBF, Rec(..))
@@ -47,6 +49,7 @@ data SomeRequestParams f = SomeRequestParams
   deriving anyclass (FunctorB, TraversableB, ConstraintsB)
 
 deriving instance AllBF Show f SomeRequestParams => Show (SomeRequestParams f)
+deriving instance AllB (ValidateWhere Trivial FromJSON Trivial Trivial) SomeRequestParams => FromJSON (SomeRequestParams UnvalidatedData)
 
 tests :: [SomeRequestParams UnvalidatedData]
 tests =
@@ -67,7 +70,9 @@ tests =
     , somePositiveInt = Unvalidated 42
     , someLilString = Unvalidated "yay!"
     }
+
   ]
+  ++ maybeToList (decode $ "{ \"someBool\": false, \"somePositiveInt\": 11, \"someLilString\": \"good\" }")
 
 result :: [Either (Partial SomeRequestParams InvalidData) (SomeRequestParams ValidData)]
 result = runIdentity . validate <$> tests
