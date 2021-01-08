@@ -22,18 +22,16 @@ instance Equals x x
 -- Class for types that represent a small "validated" subset of some larger "raw" type, where the raw
 -- type can be converted to a sum of some error representation and the the validated type in a given
 -- context (e.g. purely with @Identity@, or with arbitrary side effects in @IO@).
-class Functor (Context v) => Validate v
+class Functor f => Validate f v
   where
-  type Context v :: Type -> Type
-  type Context v = Identity
   type Raw v :: Type
   type Error v :: Type
-  validate :: Raw v -> Context v (Either (Error v) v)
+  validate :: Raw v -> f (Either (Error v) v)
 
 -- Sometimes you need to pass @Type -> Constraint@-kinded constructors into stuff (e.g. Barbies), and when that involves
 -- requiring something about the associated types in @Validate@, you'll need a class like this
-class (Validate v, cf (Context v), cr (Raw v), ce (Error v), cv v) => ValidateWhere cf cr ce cv v
-instance (Validate v, cf (Context v), cr (Raw v), ce (Error v), cv v) => ValidateWhere cf cr ce cv v
+class (Validate f v, cr (Raw v), ce (Error v), cv v) => ValidateWhere cr ce cv f v
+instance (Validate f v, cr (Raw v), ce (Error v), cv v) => ValidateWhere cr ce cv f v
 
 -- {{{ VData
 
@@ -41,30 +39,29 @@ instance (Validate v, cf (Context v), cr (Raw v), ce (Error v), cv v) => Validat
 
 data UnvalidatedData v
   where
-  Unvalidated :: Validate v => { getUnvalidated :: Raw v } -> UnvalidatedData v
+  Unvalidated :: Validate f v => { getUnvalidated :: Raw v } -> UnvalidatedData v
 
 data InvalidData v
   where
-  Invalid :: Validate v => { getInvalid :: Error v } -> InvalidData v
+  Invalid :: Validate f v => { getInvalid :: Error v } -> InvalidData v
 
 data ValidData v
   where
-  Valid :: Validate v => { getValid :: v } -> ValidData v
+  Valid :: Validate f v => { getValid :: v } -> ValidData v
 
 type ValidatedData = Sum InvalidData ValidData
 
 -- If a thing can be validated, so can a @VData@ wrapper around it
-instance Validate v => Validate (ValidData v)
+instance Validate f v => Validate f (ValidData v)
   where
-  type Context (ValidData v) = Context v
   type Raw (ValidData v) = UnvalidatedData v
   type Error (ValidData v) = InvalidData v
   validate = fmap (bimap Invalid Valid). validate @v . getUnvalidated
 
-validateData :: forall v.
-  Validate v =>
+validateData :: forall v f.
+  Validate f v =>
   UnvalidatedData v ->
-  Compose (Context v) ValidatedData v
+  Compose f ValidatedData v
 validateData = Compose . fmap (either InL InR) . validate @(ValidData v)
 
 validateFields :: forall b f. (Applicative f, TraversableB b) => b (Compose f ValidatedData) -> f (Either (Partial b InvalidData) (b ValidData))
@@ -87,9 +84,8 @@ validateFields = fmap go . bsequence
 
 newtype ValidateIn f b = ValidateIn { getValidatesIn :: b ValidData }
 
-instance (Applicative f, AllB (ValidateWhere (Equals f) Trivial Trivial Trivial) b, TraversableB b, ConstraintsB b) => Validate (ValidateIn f b)
+instance (Applicative f, AllB (Validate f) b, TraversableB b, ConstraintsB b) => Validate f (ValidateIn f b)
   where
-  type Context (ValidateIn f b) = f
   type Raw (ValidateIn f b) = b UnvalidatedData
   type Error (ValidateIn f b) = Partial b InvalidData
   validate = fmap (fmap ValidateIn) . validateFields . bmapC @(ValidateWhere (Equals f) Trivial Trivial Trivial) @b @UnvalidatedData @(Compose f ValidatedData) validateData
@@ -98,19 +94,19 @@ instance (Applicative f, AllB (ValidateWhere (Equals f) Trivial Trivial Trivial)
 
 --     {{{ Generic
 
-instance (Validate v, Generic (Raw v)) => Generic (UnvalidatedData v)
+instance (Validate f v, Generic (Raw v)) => Generic (UnvalidatedData v)
   where
   type Rep (UnvalidatedData v) = Rep (Raw v)
   from = from . getUnvalidated
   to = Unvalidated . to
 
-instance (Validate v, Generic (Error v)) => Generic (InvalidData v)
+instance (Validate f v, Generic (Error v)) => Generic (InvalidData v)
   where
   type Rep (InvalidData v) = Rep (Error v)
   from = from . getInvalid
   to = Invalid . to
 
-instance (Validate v, Generic v) => Generic (ValidData v)
+instance (Validate f v, Generic v) => Generic (ValidData v)
   where
   type Rep (ValidData v) = Rep v
   from = from . getValid
@@ -138,15 +134,15 @@ instance Show v => Show (ValidData v)
 
 --         {{{ FromJSON
 
-instance (Validate v, FromJSON (Raw v)) => FromJSON (UnvalidatedData v)
+instance (Validate f v, FromJSON (Raw v)) => FromJSON (UnvalidatedData v)
   where
   parseJSON = fmap Unvalidated . parseJSON
 
-instance (Validate v, FromJSON (Error v)) => FromJSON (InvalidData v)
+instance (Validate f v, FromJSON (Error v)) => FromJSON (InvalidData v)
   where
   parseJSON = fmap Invalid . parseJSON
 
-instance (Validate v, FromJSON v) => FromJSON (ValidData v)
+instance (Validate f v, FromJSON v) => FromJSON (ValidData v)
   where
   parseJSON = fmap Valid . parseJSON
 
@@ -154,15 +150,15 @@ instance (Validate v, FromJSON v) => FromJSON (ValidData v)
 
 --         {{{ ToJSON
 
-instance (Validate v, ToJSON (Raw v)) => ToJSON (UnvalidatedData v)
+instance (Validate f v, ToJSON (Raw v)) => ToJSON (UnvalidatedData v)
   where
   toJSON = toJSON . getUnvalidated
 
-instance (Validate v, ToJSON (Error v)) => ToJSON (InvalidData v)
+instance (Validate f v, ToJSON (Error v)) => ToJSON (InvalidData v)
   where
   toJSON = toJSON . getInvalid
 
-instance (Validate v, ToJSON v) => ToJSON (ValidData v)
+instance (Validate f v, ToJSON v) => ToJSON (ValidData v)
   where
   toJSON = toJSON . getValid
 
@@ -203,13 +199,13 @@ instance
   where
   show = show . bmapC @Show (Shown . show . getCompose) . getAugmented
 
-class (Validate v, Show (Error v)) => ShowError v
-instance (Validate v, Show (Error v)) => ShowError v
+class (Validate f v, Show (Error v)) => ShowError f v
+instance (Validate f v, Show (Error v)) => ShowError f v
 
 instance {-# OVERLAPS #-}
   ( Show1' f
   , Functor f
-  , AllB ShowError b
+  , AllB (ShowError f) b
   , Show (b Shown)
   , FunctorB b
   , ConstraintsB b
