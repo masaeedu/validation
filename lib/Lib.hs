@@ -48,6 +48,7 @@ data SomeRequestParams f = SomeRequestParams
   deriving stock Generic
   deriving anyclass (FunctorB, TraversableB, ConstraintsB)
 
+deriving via (ValidateIn Identity SomeRequestParams) instance Validate (SomeRequestParams ValidData)
 deriving instance AllBF Show f SomeRequestParams => Show (SomeRequestParams f)
 deriving instance AllB (ValidateWhere Trivial FromJSON Trivial Trivial) SomeRequestParams => FromJSON (SomeRequestParams UnvalidatedData)
 
@@ -70,12 +71,12 @@ tests =
     , somePositiveInt = Unvalidated 42
     , someLilString = Unvalidated "yay!"
     }
-
   ]
   ++ maybeToList (decode $ "{ \"someBool\": false, \"somePositiveInt\": 11, \"someLilString\": \"good\" }")
 
 result :: [Either (Partial SomeRequestParams InvalidData) (SomeRequestParams ValidData)]
 result = runIdentity . validate <$> tests
+
 {-
 Left SomeRequestParams
     { someBool = False

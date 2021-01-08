@@ -49,7 +49,7 @@ data InvalidData v
 
 data ValidData v
   where
-  Valid :: { getValid :: v } -> ValidData v
+  Valid :: Validate v => { getValid :: v } -> ValidData v
 
 type ValidatedData = Sum InvalidData ValidData
 
@@ -85,11 +85,14 @@ validateFields = fmap go . bsequence
     InR (Valid _) -> Compose Nothing
     InL (Invalid e) -> Compose $ Just $ Invalid e
 
-instance (AllB (ValidateWhere (Equals Identity) Trivial Trivial Trivial) b, TraversableB b, ConstraintsB b) => Validate (b ValidData)
+newtype ValidateIn f b = ValidateIn { getValidatesIn :: b ValidData }
+
+instance (Applicative f, AllB (ValidateWhere (Equals f) Trivial Trivial Trivial) b, TraversableB b, ConstraintsB b) => Validate (ValidateIn f b)
   where
-  type Raw (b ValidData) = b UnvalidatedData
-  type Error (b ValidData) = Partial b InvalidData
-  validate = validateFields . bmapC @(ValidateWhere (Equals Identity) Trivial Trivial Trivial) validateData
+  type Context (ValidateIn f b) = f
+  type Raw (ValidateIn f b) = b UnvalidatedData
+  type Error (ValidateIn f b) = Partial b InvalidData
+  validate = fmap (fmap ValidateIn) . validateFields . bmapC @(ValidateWhere (Equals f) Trivial Trivial Trivial) @b @UnvalidatedData @(Compose f ValidatedData) validateData
 
 -- {{{ Instances
 
@@ -107,7 +110,7 @@ instance (Validate v, Generic (Error v)) => Generic (InvalidData v)
   from = from . getInvalid
   to = Invalid . to
 
-instance Generic v => Generic (ValidData v)
+instance (Validate v, Generic v) => Generic (ValidData v)
   where
   type Rep (ValidData v) = Rep v
   from = from . getValid
