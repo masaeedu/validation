@@ -5,39 +5,12 @@ import Data.Maybe (maybeToList)
 import Data.Aeson (FromJSON(..), decode)
 import Data.Functor.Identity (Identity(..))
 import GHC.Generics (Generic(..))
-import Barbies (ConstraintsB(..), FunctorB(..), TraversableB(..), AllBF, Rec(..))
+import Barbies (ConstraintsB(..), FunctorB(..), TraversableB(..), AllBF, Rec(..), Barbie(..))
+import Data.Coerce (Coercible)
+
 import Validation
-
--- Strings that are not shorter than two characters and not longer than five
-newtype LilString = LilString { getMySpecialString :: String }
-  deriving Show
-
-data LilStringError = LongerThanFive | ShorterThanTwo
-  deriving Show
-
-instance Validate LilString
-  where
-  type Raw LilString = String
-  type Error LilString = LilStringError
-  validate s
-    | length s > 5 = pure $ Left LongerThanFive
-    | length s < 2 = pure $ Left ShorterThanTwo
-    | otherwise    = pure $ Right $ LilString s
-
--- Positive integers
-newtype Positive = Positive { getPositive :: Int }
-  deriving Show
-
-data PositiveError = IsLessThanZero
-  deriving Show
-
-instance Validate Positive
-  where
-  type Raw Positive = Int
-  type Error Positive = PositiveError
-  validate i
-    | i < 0 = pure $ Left IsLessThanZero
-    | otherwise = pure $ Right $ Positive i
+import Validation.LilString
+import Validation.Positive
 
 -- A type with fields that require validation
 data SomeRequestParams f = SomeRequestParams
@@ -48,9 +21,12 @@ data SomeRequestParams f = SomeRequestParams
   deriving stock Generic
   deriving anyclass (FunctorB, TraversableB, ConstraintsB)
 
-deriving via (ValidateIn Identity SomeRequestParams) instance Validate (SomeRequestParams ValidData)
+type instance Raw (SomeRequestParams ValidData) = SomeRequestParams UnvalidatedData
+type instance Error (SomeRequestParams ValidData) = Partial SomeRequestParams InvalidData
+deriving via (Barbie SomeRequestParams ValidData) instance (Applicative f, forall x y. Coercible x y => Coercible (f x) (f y)) => Validate f (SomeRequestParams ValidData)
+
 deriving instance AllBF Show f SomeRequestParams => Show (SomeRequestParams f)
-deriving instance AllB (ValidateWhere Trivial FromJSON Trivial Trivial) SomeRequestParams => FromJSON (SomeRequestParams UnvalidatedData)
+deriving instance AllB (ValidateWhere FromJSON Trivial Trivial) SomeRequestParams => FromJSON (SomeRequestParams UnvalidatedData)
 
 tests :: [SomeRequestParams UnvalidatedData]
 tests =
@@ -72,7 +48,7 @@ tests =
     , someLilString = Unvalidated "yay!"
     }
   ]
-  ++ maybeToList (decode $ "{ \"someBool\": false, \"somePositiveInt\": 11, \"someLilString\": \"good\" }")
+  ++ maybeToList (decode "{ \"someBool\": false, \"somePositiveInt\": 11, \"someLilString\": \"good\" }")
 
 result :: [Either (Partial SomeRequestParams InvalidData) (SomeRequestParams ValidData)]
 result = runIdentity . validate <$> tests
@@ -97,6 +73,16 @@ Right
             { getPositive = 42 }
         , someLilString = LilString
             { getMySpecialString = "yay!" }
+        }
+    )
+
+Right
+    ( SomeRequestParams
+        { someBool = False
+        , somePositiveInt = Positive
+            { getPositive = 11 }
+        , someLilString = LilString
+            { getMySpecialString = "good" }
         }
     )
 -}
