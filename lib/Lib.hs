@@ -36,36 +36,36 @@ tests =
     , someLilString = Unvalidated "foo"
     }
 
+{-
+
+Left SomeRequestParams
+    { someBool = False
+    , somePositiveInt = Just IsLessThanZero
+    , someLilString = Nothing
+    }
+-}
+
   , SomeRequestParams
     { someBool = True
     , somePositiveInt = Unvalidated 42
     , someLilString = Unvalidated "this is bad!"
     }
 
-  , SomeRequestParams
-    { someBool = False
-    , somePositiveInt = Unvalidated 42
-    , someLilString = Unvalidated "yay!"
-    }
-  ]
-  ++ maybeToList (decode "{ \"someBool\": false, \"somePositiveInt\": 11, \"someLilString\": \"good\" }")
-
-result :: [Either (Partial SomeRequestParams InvalidData) (SomeRequestParams ValidData)]
-result = runIdentity . validate <$> tests
-
 {-
-Left SomeRequestParams
-    { someBool = False
-    , somePositiveInt = Just IsLessThanZero
-    , someLilString = Nothing
-    }
-
 Left SomeRequestParams
     { someBool = True
     , somePositiveInt = Nothing
     , someLilString = Just LongerThanFive
     }
+-}
 
+  , SomeRequestParams
+    { someBool = False
+    , somePositiveInt = Unvalidated 42
+    , someLilString = Unvalidated "yay!"
+    }
+
+{-
 Right
     ( SomeRequestParams
         { someBool = False
@@ -75,7 +75,11 @@ Right
             { getMySpecialString = "yay!" }
         }
     )
+-}
+  ]
 
+  ++ maybeToList (decode "{ \"someBool\": false, \"somePositiveInt\": 11, \"someLilString\": \"good\" }")
+{-
 Right
     ( SomeRequestParams
         { someBool = False
@@ -86,3 +90,6 @@ Right
         }
     )
 -}
+
+result :: [Either (Partial SomeRequestParams InvalidData) (SomeRequestParams ValidData)]
+result = runIdentity . validate <$> tests

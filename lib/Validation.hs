@@ -1,4 +1,4 @@
-{-# LANGUAGE DeriveGeneric, DeriveAnyClass, UndecidableSuperClasses #-}
+{-# LANGUAGE DeriveGeneric, DeriveAnyClass, UndecidableSuperClasses, AllowAmbiguousTypes #-}
 module Validation where
 
 import Barbies (FunctorB(..), TraversableB(..), ConstraintsB(..), bsequence, bmapC, Barbie(..))
@@ -8,6 +8,7 @@ import Data.Functor.Sum
 import Data.Bifunctor (Bifunctor(..))
 import GHC.Generics (Generic(..))
 import Data.Aeson (FromJSON(..), ToJSON(..))
+import Data.Coerce (Coercible, coerce)
 
 -- Augmented newtype for barbies
 newtype Augmented f b g = Augmented { getAugmented :: b (Compose f g) }
@@ -69,6 +70,10 @@ type family Error v :: Type
 class Functor f => Validate f v
   where
   validate :: Raw v -> f (Either (Error v) v)
+  extract :: v -> Raw v
+
+  default extract :: Coercible v (Raw v) => v -> Raw v
+  extract = coerce
 
 -- Sometimes you need to pass @Type -> Constraint@-kinded constructors into stuff (e.g. Barbies), and when that involves
 -- requiring something about the associated types in @Validate@, you'll need a class like this
@@ -110,12 +115,7 @@ type instance Error (ValidData v) = InvalidData v
 instance Validate f v => Validate f (ValidData v)
   where
   validate = fmap (bimap Invalid Valid). validate . getUnvalidated
-
-validateData :: forall v f.
-  Validate f v =>
-  UnvalidatedData v ->
-  Compose f ValidatedData v
-validateData = Compose . fmap (either InL InR) . validate
+  extract = Unvalidated . extract @f @v . getValid
 
 validateFields :: forall b f. (Applicative f, TraversableB b) => b (Compose f ValidatedData) -> f (Either (Partial b InvalidData) (b ValidData))
 validateFields = fmap go . bsequence
@@ -145,4 +145,5 @@ instance
   ) =>
   Validate f (Barbie b ValidData)
   where
-  validate = fmap (fmap Barbie) . validateFields . bmapC @(Validate f) @b @UnvalidatedData @(Compose f ValidatedData) validateData
+  validate = fmap (fmap Barbie) . validateFields . bmapC @(Validate f) @b @UnvalidatedData @(Compose f ValidatedData) (Compose . fmap (either InL InR) . validate)
+  extract = bmapC @(Validate f) (extract @f) . getBarbie
