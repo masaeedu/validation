@@ -5,5 +5,5 @@ import Text.Pretty.Simple
 
 main :: IO ()
 main = do
-  _ <- traverse pPrint result
+  _ <- result >>= traverse pPrint
   pure ()

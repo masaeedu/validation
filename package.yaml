@@ -11,6 +11,7 @@ dependencies:
 - aeson
 - barbies
 - validation-selective
+- time
 - pretty-simple
 
 ghc-options: -Wall
