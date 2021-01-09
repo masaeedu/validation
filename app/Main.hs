@@ -1,6 +1,6 @@
 module Main where
 
-import Lib
+import Example
 import Text.Pretty.Simple
 
 main :: IO ()

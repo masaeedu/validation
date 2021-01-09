@@ -1,5 +1,5 @@
 {-# LANGUAGE TypeFamilies, DeriveGeneric, DeriveAnyClass, DerivingVia, LambdaCase, OverloadedStrings #-}
-module Lib where
+module Example where
 
 import Data.Time
 import Data.Fixed
